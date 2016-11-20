@@ -1,4 +1,5 @@
 import org.apache.commons.io.FileUtils;
+import org.deeplearning4j.models.word2vec.Word2Vec;
 import org.deeplearning4j.nn.api.Layer;
 import org.deeplearning4j.nn.api.OptimizationAlgorithm;
 import org.deeplearning4j.nn.conf.BackpropType;
@@ -19,6 +20,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.nio.charset.Charset;
+import java.util.List;
 import java.util.Random;
 
 /**GravesLSTM Character modelling example
@@ -51,6 +53,15 @@ public class LSTMBugPredictor {
 		// Above is Used to 'prime' the LSTM with a character sequence to continue/complete.
 		// Initialization characters must all be in CharacterIterator.getMinimalCharacterSet() by default
 		Random rng = new Random(12345);
+
+		//Make Connection to DB and get Data
+		SQLConnector sqlConnector = new SQLConnector(10000);
+		List<String> rowList = sqlConnector.getRowList();
+
+		//Vectorize the Words
+		Word2Vector word2Vector = new Word2Vector(rowList);
+		word2Vector.test("boolean", 3);
+		Word2Vec vec = word2Vector.getVec();
 
 		//Get a DataSetIterator that handles vectorization of text into something we can use to train
 		// our GravesLSTM network.
