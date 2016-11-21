@@ -55,13 +55,18 @@ public class LSTMBugPredictor {
 		Random rng = new Random(12345);
 
 		//Make Connection to DB and get Data
-		SQLConnector sqlConnector = new SQLConnector(10000);
+		SQLConnector sqlConnector = new SQLConnector(1000);
 		List<String> rowList = sqlConnector.getRowList();
 
 		//Vectorize the Words
 		Word2Vector word2Vector = new Word2Vector(rowList);
 		word2Vector.test("boolean", 3);
 		Word2Vec vec = word2Vector.getVec();
+
+
+		WordIterator iterator = new WordIterator(vec, rowList, miniBatchSize, 100);
+		DataSet test = iterator.next();
+		DataSet test2 = iterator.next();
 
 		//Get a DataSetIterator that handles vectorization of text into something we can use to train
 		// our GravesLSTM network.
