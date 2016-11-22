@@ -1,6 +1,8 @@
 import org.deeplearning4j.models.word2vec.VocabWord;
 import org.deeplearning4j.models.word2vec.Word2Vec;
 import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.api.rng.*;
+import org.nd4j.linalg.api.rng.Random;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.api.DataSetPreProcessor;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
@@ -20,9 +22,8 @@ public class WordIterator implements DataSetIterator {
     private int exampleLength;
     //Size of each minibatch (number of examples)
     private int miniBatchSize;
-
+    //position of the cursor
     private int position;
-    private Random rng;
     //Offsets for the start of each example
     private LinkedList<Integer> exampleStartOffsets = new LinkedList<>();
 
@@ -52,12 +53,16 @@ public class WordIterator implements DataSetIterator {
 
     @Override
     public DataSet next(int num) {
-        int currMinibatchSize = Math.min(num, allWords.size());
+        int currMinibatchSize = Math.min(num, allWords.size()-1);
         // dimension 0 = number of examples in minibatch
         // dimension 1 = size of each vector (i.e., number of characters)
         // dimension 2 = length of each time series/example
-        INDArray input = Nd4j.create(new int[]{currMinibatchSize,word2Vec.getVocab().numWords(),exampleLength}, 'f');
-        INDArray labels = Nd4j.create(new int[]{currMinibatchSize,word2Vec.getVocab().numWords(),exampleLength}, 'f');
+        INDArray input = Nd4j.create(new int[]{currMinibatchSize,word2Vec.getLayerSize(),exampleLength}, 'f');
+        INDArray labels = Nd4j.create(new int[]{currMinibatchSize,word2Vec.getLayerSize(),exampleLength}, 'f');
+
+        if (position + currMinibatchSize > allWords.size()-1){
+            currMinibatchSize = allWords.size() - position-1;
+        }
 
         for( int i=0; i<currMinibatchSize; i++ ){
             for( int j=0; j<exampleLength; j++){
@@ -67,7 +72,7 @@ public class WordIterator implements DataSetIterator {
                     input.putScalar(new int[]{i,wordArrayIndex,j}, value);
                     labels.putScalar(new int[]{i,wordArrayIndex++,j}, value);
                 }
-                position++;
+                if (position<allWords.size()-1)  position++;
             }
         }
 
@@ -76,17 +81,17 @@ public class WordIterator implements DataSetIterator {
 
     @Override
     public int totalExamples() {
-        return 0;
+        return (allWords.size()-1)/miniBatchSize;
     }
 
     @Override
     public int inputColumns() {
-        return 0;
+        return word2Vec.getLayerSize();
     }
 
     @Override
     public int totalOutcomes() {
-        return 0;
+        return word2Vec.getLayerSize();
     }
 
     @Override
@@ -101,7 +106,7 @@ public class WordIterator implements DataSetIterator {
 
     @Override
     public void reset() {
-
+        position = 0;
     }
 
     @Override
@@ -111,12 +116,12 @@ public class WordIterator implements DataSetIterator {
 
     @Override
     public int cursor() {
-        return 0;
+        return position;
     }
 
     @Override
     public int numExamples() {
-        return 0;
+        return totalExamples();
     }
 
     @Override
@@ -136,7 +141,7 @@ public class WordIterator implements DataSetIterator {
 
     @Override
     public boolean hasNext() {
-        return position<allWords.size();
+        return position<allWords.size()-1;
     }
 
     @Override
@@ -147,5 +152,31 @@ public class WordIterator implements DataSetIterator {
     @Override
     public void remove() {
 
+    }
+
+    public String getRandomWord(){
+        java.util.Random rng = new java.util.Random(allWords.size());
+        String word = allWords.get(rng.nextInt(allWords.size()-1));
+        return word;
+    }
+
+    public double[] getVector(String word){
+        double[] vector = word2Vec.getWordVector(word);
+        if (vector == null || vector.length<1){
+            vector = new double[word2Vec.getLayerSize()];
+        }
+        return vector;
+    }
+
+    public String getWord(double[] vector){
+        INDArray wordArray = Nd4j.create(vector.length);
+        int i = 0;
+        for (double value : vector) {
+            wordArray.putScalar(i, value);
+            i++;
+        }
+        Collection<String> word = word2Vec.wordsNearest(wordArray, 1);
+        String strWord = word.toString();
+        return strWord;
     }
 }

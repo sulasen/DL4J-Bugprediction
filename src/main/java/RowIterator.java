@@ -16,6 +16,7 @@ public class RowIterator extends BaseSentenceIterator {
         this.rows = rows;
         this.counter = 0;
     }
+
     @Override
     public String nextSentence(){
         String line = rows.get(counter);

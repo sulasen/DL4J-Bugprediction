@@ -43,34 +43,29 @@ public class LSTMBugPredictor {
 	public static void main( String[] args ) throws Exception {
 		int lstmLayerSize = 200;					//Number of units in each GravesLSTM layer
 		int miniBatchSize = 32;						//Size of mini batch to use when  training
-		int exampleLength = 1000;					//Length of each training example sequence to use. This could certainly be increased
+		int exampleLength = 100;					//Length of each training example sequence to use. This could certainly be increased
         int tbpttLength = 50;                       //Length for truncated backpropagation through time. i.e., do parameter updates ever 50 characters
 		int numEpochs = 1;							//Total number of training epochs
         int generateSamplesEveryNMinibatches = 10;  //How frequently to generate samples from the network? 1000 characters / 50 tbptt length: 20 parameter updates per minibatch
 		int nSamplesToGenerate = 4;					//Number of samples to generate after each training epoch
-		int nCharactersToSample = 300;				//Length of each sample to generate
+		int nCharactersToSample = 100;				//Length of each sample to generate
 		String generationInitialization = null;		//Optional character initialization; a random character is used if null
 		// Above is Used to 'prime' the LSTM with a character sequence to continue/complete.
 		// Initialization characters must all be in CharacterIterator.getMinimalCharacterSet() by default
 		Random rng = new Random(12345);
 
 		//Make Connection to DB and get Data
-		SQLConnector sqlConnector = new SQLConnector(1000);
-		List<String> rowList = sqlConnector.getRowList();
+		SQLConnector sqlConnector = new SQLConnector(10000);
+		List<String> rowList = sqlConnector.getFixedList();
 
 		//Vectorize the Words
 		Word2Vector word2Vector = new Word2Vector(rowList);
 		word2Vector.test("boolean", 3);
 		Word2Vec vec = word2Vector.getVec();
 
+		WordIterator iter = new WordIterator(vec, rowList, miniBatchSize, 100);
 
-		WordIterator iterator = new WordIterator(vec, rowList, miniBatchSize, 100);
-		DataSet test = iterator.next();
-		DataSet test2 = iterator.next();
-
-		//Get a DataSetIterator that handles vectorization of text into something we can use to train
-		// our GravesLSTM network.
-		CharacterIterator iter = getShakespeareIterator(miniBatchSize,exampleLength);
+		//CharacterIterator iter = getShakespeareIterator(miniBatchSize,exampleLength);
 		int nOut = iter.totalOutcomes();
 
 		//Set up network configuration:
@@ -88,7 +83,7 @@ public class LSTMBugPredictor {
 					.activation("tanh").build())
 			.layer(1, new GravesLSTM.Builder().nIn(lstmLayerSize).nOut(lstmLayerSize)
 					.activation("tanh").build())
-			.layer(2, new RnnOutputLayer.Builder(LossFunction.MCXENT).activation("softmax")        //MCXENT + softmax for classification
+			.layer(2, new RnnOutputLayer.Builder(LossFunction.MCXENT).activation("tanh")        //MCXENT + softmax for classification
 					.nIn(lstmLayerSize).nOut(nOut).build())
             .backpropType(BackpropType.TruncatedBPTT).tBPTTForwardLength(tbpttLength).tBPTTBackwardLength(tbpttLength)
 			.pretrain(false).backprop(true)
@@ -133,33 +128,6 @@ public class LSTMBugPredictor {
 		System.out.println("\n\nExample complete");
 	}
 
-	/** Downloads Shakespeare training data and stores it locally (temp directory). Then set up and return a simple
-	 * DataSetIterator that does vectorization based on the text.
-	 * @param miniBatchSize Number of text segments in each training mini-batch
-	 * @param sequenceLength Number of characters in each text segment.
-	 */
-	public static CharacterIterator getShakespeareIterator(int miniBatchSize, int sequenceLength) throws Exception{
-		//The Complete Works of William Shakespeare
-		//5.3MB file in UTF-8 Encoding, ~5.4 million characters
-		//https://www.gutenberg.org/ebooks/100
-		String url = "https://s3.amazonaws.com/dl4j-distribution/pg100.txt";
-		String tempDir = System.getProperty("java.io.tmpdir");
-		String fileLocation = tempDir + "/Shakespeare.txt";	//Storage location from downloaded file
-		File f = new File(fileLocation);
-		if( !f.exists() ){
-			FileUtils.copyURLToFile(new URL(url), f);
-			System.out.println("File downloaded to " + f.getAbsolutePath());
-		} else {
-			System.out.println("Using existing text file at " + f.getAbsolutePath());
-		}
-
-		if(!f.exists()) throw new IOException("File does not exist: " + fileLocation);	//Download problem?
-
-		char[] validCharacters = CharacterIterator.getMinimalCharacterSet();	//Which characters are allowed? Others will be removed
-		return new CharacterIterator(fileLocation, Charset.forName("UTF-8"),
-				miniBatchSize, sequenceLength, validCharacters, new Random(12345));
-	}
-
 	/** Generate a sample from the network, given an (optional, possibly null) initialization. Initialization
 	 * can be used to 'prime' the RNN with a sequence you want to extend/continue.<br>
 	 * Note that the initalization is used for all samples
@@ -169,26 +137,29 @@ public class LSTMBugPredictor {
 	 * @param iter CharacterIterator. Used for going from indexes back to characters
 	 */
 	private static String[] sampleCharactersFromNetwork(String initialization, MultiLayerNetwork net,
-                                                        CharacterIterator iter, Random rng, int charactersToSample, int numSamples ){
+                                                        WordIterator iter, Random rng, int charactersToSample, int numSamples ){
 		//Set up initialization. If no initialization: use a random character
 		if( initialization == null ){
-			initialization = String.valueOf(iter.getRandomCharacter());
+			initialization = iter.getRandomWord();
 		}
+		double[] init = iter.getVector(initialization);
 
 		//Create input for initialization
-		INDArray initializationInput = Nd4j.zeros(numSamples, iter.inputColumns(), initialization.length());
-		char[] init = initialization.toCharArray();
+		INDArray initializationInput = Nd4j.zeros(numSamples, iter.inputColumns(), init.length);
 		for( int i=0; i<init.length; i++ ){
-			int idx = iter.convertCharacterToIndex(init[i]);
 			for( int j=0; j<numSamples; j++ ){
-				initializationInput.putScalar(new int[]{j,idx,i}, 1.0f);
+				int vectorIndex = 0;
+				for (double value:init){
+					initializationInput.putScalar(new int[]{j,vectorIndex,i}, value);
+					vectorIndex++;
+				}
 			}
 		}
 
 		StringBuilder[] sb = new StringBuilder[numSamples];
 		for( int i=0; i<numSamples; i++ ) sb[i] = new StringBuilder(initialization);
 
-		//Sample from network (and feed samples back into input) one character at a time (for all samples)
+		//Sample from network (and feed samples back into input) one word at a time (for all samples)
 		//Sampling is done in parallel here
 		net.rnnClearPreviousState();
 		INDArray output = net.rnnTimeStep(initializationInput);
@@ -201,10 +172,13 @@ public class LSTMBugPredictor {
 			for( int s=0; s<numSamples; s++ ){
 				double[] outputProbDistribution = new double[iter.totalOutcomes()];
 				for( int j=0; j<outputProbDistribution.length; j++ ) outputProbDistribution[j] = output.getDouble(s,j);
-				int sampledCharacterIdx = sampleFromDistribution(outputProbDistribution,rng);
-
-				nextInput.putScalar(new int[]{s,sampledCharacterIdx}, 1.0f);		//Prepare next time step input
-				sb[s].append(iter.convertIndexToCharacter(sampledCharacterIdx));	//Add sampled character to StringBuilder (human readable output)
+				int row = 0;
+				for (double outputValue: outputProbDistribution) {
+					nextInput.putScalar(new int[]{s, row}, outputValue);
+					row++;
+				}
+				//Prepare next time step input
+				sb[s].append(iter.getWord(outputProbDistribution));	//Add sampled character to StringBuilder (human readable output)
 			}
 
 			output = net.rnnTimeStep(nextInput);	//Do one time step of forward pass

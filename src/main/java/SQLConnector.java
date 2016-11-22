@@ -9,38 +9,48 @@ import java.util.List;
  * Created by Sebi on 11/20/2016.
  */
 public class SQLConnector {
-    private List<String> rowList;
+    private List<String> fixedList; //contains the fixed strings
+    private List<String> bugList; //contains the buggy strings
+    private List<String> labelList; //contains the label strings
+    private List<String> allList; //contains the all (fixed + buggy) strings
+    private String url;
+    private int counter;
     private static Logger log = LoggerFactory.getLogger(Word2Vector.class);
 
+
     public SQLConnector(int rows) throws Exception {
-        this.rowList = new LinkedList<String>();
+        this.counter = 0;
+        this.url = "jdbc:mysql://localhost:3306/bugfixes";
+        getnextRows(rows);
+    }
+
+    public void getnextRows(int rows) throws SQLException {
+        String selectStatement = "SELECT * FROM method_change LIMIT " + counter + ", " + rows;
+        getResults(selectStatement);
+        counter += rows;
+    }
+
+    private void getResults(String selectStatement){
+        this.fixedList = new LinkedList<String>();
+        this.bugList = new LinkedList<String>();
+        this.labelList = new LinkedList<String>();
+        this.allList = new LinkedList<String>();
         try {
             //Connection to DB
-            String url = "jdbc:mysql://localhost:3306/bugfixes";
             Connection conn = DriverManager.getConnection(url, "root", "admin");
             Statement st = conn.createStatement();
-            ResultSet rs = st.executeQuery("SELECT * FROM method_change");
-            ResultSetMetaData meta = rs.getMetaData();
-
+            ResultSet rs = st.executeQuery(selectStatement);
             //Convert into usable Data
             while (rs.next()) {
-                String text_complete = rs.getString("pre_context") + " " + rs.getString("new_content") + " " + rs.getString("post_context");
-                if (this.rowList.size()<rows) {
-                    this.rowList.add(text_complete);
-                }
-                /*
-                text_complete=text_complete.replace("{", " ");
-                text_complete=text_complete.replace("}", " ");
-                text_complete=text_complete.replace("(", " ( ");
-                text_complete=text_complete.replace(")", " ) ");
-                text_complete=text_complete.replace(";", " ; ");
-                String[] lines = text_complete.split("\\s+");
-                for(String line: lines){
-                    if (rowList.size()<100000){
-                        rowList.add(line);
-                    }
-                }
-                */
+                String text_complete_bug = rs.getString("pre_context") + " " + rs.getString("old_content") + " " + rs.getString("post_context");
+                String text_complete_fix = rs.getString("pre_context") + " " + rs.getString("new_content") + " " + rs.getString("post_context");
+
+                this.bugList.add(text_complete_bug);
+                this.fixedList.add(text_complete_fix);
+                this.allList.add(text_complete_bug);
+                this.labelList.add("bug");
+                this.allList.add(text_complete_fix);
+                this.labelList.add("fix");
             }
             conn.close();
         } catch (Exception e) {
@@ -50,7 +60,34 @@ public class SQLConnector {
         }
     }
 
-    public List<String> getRowList(){
-        return this.rowList;
+    public List<String> getFixedList(){
+        return this.fixedList;
+    }
+
+    public List<String> getBugList(){
+        return this.bugList;
+    }
+
+    public List<String> getLabelList(){
+        return this.labelList;
+    }
+
+    public List<String> getMixedList(){ return this.allList; }
+
+    private String cleanString(String string){
+        /*
+        text_complete=text_complete.replace("{", " ");
+        text_complete=text_complete.replace("}", " ");
+        text_complete=text_complete.replace("(", " ( ");
+        text_complete=text_complete.replace(")", " ) ");
+        text_complete=text_complete.replace(";", " ; ");
+        String[] lines = text_complete.split("\\s+");
+        for(String line: lines){
+            if (rowList.size()<100000){
+                rowList.add(line);
+            }
+        }
+        */
+        return string;
     }
 }
