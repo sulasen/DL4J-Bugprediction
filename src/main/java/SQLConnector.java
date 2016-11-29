@@ -12,15 +12,21 @@ public class SQLConnector {
     private List<String> fixedList; //contains the fixed strings
     private List<String> bugList; //contains the buggy strings
     private List<String> labelList; //contains the label strings
-    private List<String> allList; //contains the all (fixed + buggy) strings
-    private String url;
+    private List<String> mixedList; //contains the all (fixed + buggy) strings
+    private final String url = "jdbc:mysql://localhost:3306/";
+    private String database = "bugfixes_ecplise"; //"bugfixes" or "bugfixes_ecplise"
+    private final String user = "root";
+    private String password = "admin";
     private int counter;
     private static Logger log = LoggerFactory.getLogger(Word2Vector.class);
 
 
+    public SQLConnector() throws Exception {
+        this.counter = 0;
+    }
+
     public SQLConnector(int rows) throws Exception {
         this.counter = 0;
-        this.url = "jdbc:mysql://localhost:3306/bugfixes";
         getnextRows(rows);
     }
 
@@ -30,26 +36,39 @@ public class SQLConnector {
         counter += rows;
     }
 
+
+    public void getnextPercent(double percent) throws SQLException {
+        String selectStatement = "SELECT * FROM method_change";
+        getResults(selectStatement);
+        int total = this.fixedList.size();
+        int rows = (int) (total * percent) - 1;
+        fixedList = fixedList.subList(counter, counter+rows);
+        bugList = bugList.subList(counter, counter+rows);
+        labelList = labelList.subList(2*counter, 2*counter+2*rows);
+        mixedList = mixedList.subList(2*counter, 2*counter+2*rows);
+        counter = counter + rows;
+    }
+
     private void getResults(String selectStatement){
         this.fixedList = new LinkedList<String>();
         this.bugList = new LinkedList<String>();
         this.labelList = new LinkedList<String>();
-        this.allList = new LinkedList<String>();
+        this.mixedList = new LinkedList<String>();
         try {
             //Connection to DB
-            Connection conn = DriverManager.getConnection(url, "root", "admin");
+            Connection conn = DriverManager.getConnection(url  + this.database, user, password);
             Statement st = conn.createStatement();
             ResultSet rs = st.executeQuery(selectStatement);
             //Convert into usable Data
             while (rs.next()) {
-                String text_complete_bug = rs.getString("pre_context") + " " + rs.getString("old_content") + " " + rs.getString("post_context");
-                String text_complete_fix = rs.getString("pre_context") + " " + rs.getString("new_content") + " " + rs.getString("post_context");
+                String text_complete_bug = cleanString(rs.getString("pre_context") + rs.getString("old_content") + rs.getString("post_context"));
+                String text_complete_fix = cleanString(rs.getString("pre_context") + rs.getString("new_content") + rs.getString("post_context"));
 
                 this.bugList.add(text_complete_bug);
                 this.fixedList.add(text_complete_fix);
-                this.allList.add(text_complete_bug);
+                this.mixedList.add(text_complete_bug);
                 this.labelList.add("bug");
-                this.allList.add(text_complete_fix);
+                this.mixedList.add(text_complete_fix);
                 this.labelList.add("fix");
             }
             conn.close();
@@ -72,22 +91,11 @@ public class SQLConnector {
         return this.labelList;
     }
 
-    public List<String> getMixedList(){ return this.allList; }
+    public List<String> getMixedList(){ return this.mixedList; }
 
     private String cleanString(String string){
-        /*
-        text_complete=text_complete.replace("{", " ");
-        text_complete=text_complete.replace("}", " ");
-        text_complete=text_complete.replace("(", " ( ");
-        text_complete=text_complete.replace(")", " ) ");
-        text_complete=text_complete.replace(";", " ; ");
-        String[] lines = text_complete.split("\\s+");
-        for(String line: lines){
-            if (rowList.size()<100000){
-                rowList.add(line);
-            }
-        }
-        */
+        //Parse the String into a more useable format
+
         return string;
     }
 }

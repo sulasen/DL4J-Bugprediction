@@ -6,19 +6,26 @@ import java.util.List;
 public class BugClassifier {
 
     public static void main( String[] args ) throws Exception {
+        double percentTraining = 0.9;
+        double percentTesting = 0.1;
         //Make Connection to DB and get Data
-        SQLConnector sqlConnector = new SQLConnector(10000);
+        SQLConnector sqlConnector = new SQLConnector();
+
+        //Get List with bugs & their fixes, labelled accordingly
+        sqlConnector.getnextPercent(percentTraining);
         List<String> rowList = sqlConnector.getMixedList();
         List<String> labelList = sqlConnector.getLabelList();
-        sqlConnector.getnextRows(100);
+
+        //Get List with 'unlabelled' data to test accuracy
+        sqlConnector.getnextPercent(percentTesting);
         List<String> unlabeledList1 = sqlConnector.getFixedList();
         List<String> unlabeledList2 = sqlConnector.getBugList();
 
-        //Vectorize the Words
+        //Vectorize the Paragraphs
         Doc2Vector doc2vec = new Doc2Vector(rowList, labelList);
         doc2vec.makeParagraphVectors();
-        doc2vec.checkUnlabeledData(unlabeledList1, "bug");
-        doc2vec.checkUnlabeledData(unlabeledList2, "fix");
-
+        //Check accuracy
+        doc2vec.checkUnlabeledData(unlabeledList1, "fix");
+        doc2vec.checkUnlabeledData(unlabeledList2, "bug");
     }
 }

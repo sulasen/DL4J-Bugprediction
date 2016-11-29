@@ -27,10 +27,14 @@ public class Doc2Vector {
     LabelAwareIterator iterator;
     TokenizerFactory tokenizerFactory;
     List<String> rowList;
+    Double right;
+    int total;
     private static Logger log = LoggerFactory.getLogger(Doc2Vector.class);
 
     public Doc2Vector(List<String> rowList, List<String> labelList) throws Exception {
         this.rowList = rowList;
+        this.right = 0.0;
+        this.total = 0;
         iterator = new DocIterator(rowList, labelList);
         tokenizerFactory = new DefaultTokenizerFactory();
         tokenizerFactory.setTokenPreProcessor(new CommonPreprocessor());
@@ -40,7 +44,7 @@ public class Doc2Vector {
         // ParagraphVectors training configuration
         paragraphVectors = new ParagraphVectors.Builder()
                 .learningRate(0.025)
-                .minLearningRate(0.001)
+                .minLearningRate(0.00001)
                 .batchSize(1000)
                 .epochs(5)
                 .iterate(iterator)
@@ -70,17 +74,13 @@ public class Doc2Vector {
         LabelSeeker seeker = new LabelSeeker(availabels, (InMemoryLookupTable<VocabWord>) paragraphVectors.getLookupTable());
 
         Double right = 0.0;
-        Double wrong = 0.0;
         while (unlabeledIterator.hasNextDocument()) {
             LabelledDocument document = unlabeledIterator.nextDocument();
             INDArray documentAsCentroid = meansBuilder.documentAsVector(document);
             List<Pair<String, Double>> scores = seeker.getScores(documentAsCentroid);
 
          /*
-          please note, document.getLabel() is used just to show which document we're looking at now,
-          as a substitute for printing out the whole document name.
-          So, labels on these two documents are used like titles,
-          just to visualize our classification done properly
+          Print out the result
          */
             log.info("Document '" + document.getLabel() + "' falls into the following categories: ");
             Double highest = 0.0;
@@ -95,11 +95,11 @@ public class Doc2Vector {
             if (strHighest == document.getLabel()){
                 right++;
             }
-            else{
-                wrong++;
-            }
         }
-        Double accuracy = right / unlabeledList.size();
+        this.right += right;
+        this.total += unlabeledList.size();
+
+        Double accuracy = this.right / this.total;
         log.info("Total accuracy :" + accuracy);
     }
 }
