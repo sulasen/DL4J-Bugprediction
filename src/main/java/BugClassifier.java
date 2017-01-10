@@ -1,3 +1,14 @@
+import com.github.javaparser.JavaParser;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.BodyDeclaration;
+import com.github.javaparser.ast.nodeTypes.NodeWithType;
+import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.*;
+
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -20,6 +31,33 @@ public class BugClassifier {
         sqlConnector.getnextPercent(percentTesting);
         List<String> unlabeledList1 = sqlConnector.getFixedList();
         List<String> unlabeledList2 = sqlConnector.getBugList();
+
+
+        /*Get AST from JavaParser
+        List<BodyDeclaration> compilationUnits = new LinkedList<>();
+        for (String listItem : unlabeledList1) {
+            try {
+                BodyDeclaration cuItem = JavaParser.parseClassBodyDeclaration("public class A {" + listItem + "}");
+                compilationUnits.add(cuItem);
+                System.out.println(cuItem);
+            }//catch (Exception e){System.out.println("Fail");}
+            finally {}
+        }
+
+        for (BodyDeclaration cu:compilationUnits) {
+            List<NodeList<?>> nodeLists = cu.getNodeLists();
+            for (NodeList nodeList:nodeLists) {
+                Iterator iterator = nodeList.iterator();
+                while(iterator.hasNext()){
+                    Node node = (Node) iterator.next();
+                    while (node.getChildNodes().size()>0){
+
+
+                    }
+                }
+            }
+        }
+*/
 
         //Vectorize the Paragraphs
         Doc2Vector doc2vec = new Doc2Vector(rowList, labelList);

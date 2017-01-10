@@ -1,5 +1,6 @@
 import org.deeplearning4j.berkeley.Pair;
 import org.deeplearning4j.models.embeddings.inmemory.InMemoryLookupTable;
+import org.deeplearning4j.models.embeddings.learning.impl.sequence.DM;
 import org.deeplearning4j.models.paragraphvectors.ParagraphVectors;
 import org.deeplearning4j.models.word2vec.VocabWord;
 import org.deeplearning4j.text.documentiterator.LabelAwareIterator;
@@ -40,7 +41,7 @@ public class Doc2Vector {
         tokenizerFactory.setTokenPreProcessor(new CommonPreprocessor());
     }
 
-    void makeParagraphVectors()  throws Exception {
+    public void makeParagraphVectors()  throws Exception {
         // ParagraphVectors training configuration
         paragraphVectors = new ParagraphVectors.Builder()
                 .learningRate(0.025)
@@ -50,13 +51,14 @@ public class Doc2Vector {
                 .iterate(iterator)
                 .trainWordVectors(true)
                 .tokenizerFactory(tokenizerFactory)
+                .sequenceLearningAlgorithm(new DM())
                 .build();
 
         // Start model training
         paragraphVectors.fit();
     }
 
-    void checkUnlabeledData(List<String> unlabeledList, String label) throws Exception {
+    public void checkUnlabeledData(List<String> unlabeledList, String label) throws Exception {
         List<String> availabels = new LinkedList<String>();
         availabels.add("bug");
         availabels.add("fix");
