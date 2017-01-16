@@ -1,8 +1,7 @@
-import org.deeplearning4j.models.word2vec.VocabWord;
+package Bugprediction.Iterators;
+
 import org.deeplearning4j.models.word2vec.Word2Vec;
 import org.nd4j.linalg.api.ndarray.INDArray;
-import org.nd4j.linalg.api.rng.*;
-import org.nd4j.linalg.api.rng.Random;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.api.DataSetPreProcessor;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;

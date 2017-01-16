@@ -1,4 +1,4 @@
-package tools;
+package Bugprediction.tools;
 
 import lombok.NonNull;
 import org.deeplearning4j.models.embeddings.inmemory.InMemoryLookupTable;

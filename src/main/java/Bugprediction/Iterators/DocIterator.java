@@ -1,7 +1,8 @@
+package Bugprediction.Iterators;
+
 import org.deeplearning4j.text.documentiterator.LabelAwareIterator;
 import org.deeplearning4j.text.documentiterator.LabelledDocument;
 import org.deeplearning4j.text.documentiterator.LabelsSource;
-import org.deeplearning4j.text.sentenceiterator.BaseSentenceIterator;
 
 import java.util.List;
 

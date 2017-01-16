@@ -1,4 +1,6 @@
-import org.apache.commons.io.FileUtils;
+package Bugprediction;
+
+import Bugprediction.Iterators.WordIterator;
 import org.deeplearning4j.models.word2vec.Word2Vec;
 import org.deeplearning4j.nn.api.Layer;
 import org.deeplearning4j.nn.api.OptimizationAlgorithm;
@@ -16,10 +18,6 @@ import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.lossfunctions.LossFunctions.LossFunction;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.URL;
-import java.nio.charset.Charset;
 import java.util.List;
 import java.util.Random;
 
@@ -51,7 +49,7 @@ public class LSTMBugPredictor {
 		int nCharactersToSample = 100;				//Length of each sample to generate
 		String generationInitialization = null;		//Optional character initialization; a random character is used if null
 		// Above is Used to 'prime' the LSTM with a character sequence to continue/complete.
-		// Initialization characters must all be in CharacterIterator.getMinimalCharacterSet() by default
+		// Initialization characters must all be in Bugprediction.Iterators.CharacterIterator.getMinimalCharacterSet() by default
 		Random rng = new Random(12345);
 
 		//Make Connection to DB and get Data
@@ -65,7 +63,7 @@ public class LSTMBugPredictor {
 
 		WordIterator iter = new WordIterator(vec, rowList, miniBatchSize, 100);
 
-		//CharacterIterator iter = getShakespeareIterator(miniBatchSize,exampleLength);
+		//Bugprediction.Iterators.CharacterIterator iter = getShakespeareIterator(miniBatchSize,exampleLength);
 		int nOut = iter.totalOutcomes();
 
 		//Set up network configuration:
@@ -134,7 +132,7 @@ public class LSTMBugPredictor {
 	 * @param initialization String, may be null. If null, select a random character as initialization for all samples
 	 * @param charactersToSample Number of characters to sample from network (excluding initialization)
 	 * @param net MultiLayerNetwork with one or more GravesLSTM/RNN layers and a softmax output layer
-	 * @param iter CharacterIterator. Used for going from indexes back to characters
+	 * @param iter Bugprediction.Iterators.CharacterIterator. Used for going from indexes back to characters
 	 */
 	private static String[] sampleCharactersFromNetwork(String initialization, MultiLayerNetwork net,
                                                         WordIterator iter, Random rng, int charactersToSample, int numSamples ){

@@ -1,14 +1,5 @@
-import com.github.javaparser.JavaParser;
-import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.Node;
-import com.github.javaparser.ast.NodeList;
-import com.github.javaparser.ast.body.BodyDeclaration;
-import com.github.javaparser.ast.nodeTypes.NodeWithType;
-import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.*;
+package Bugprediction;
 
-import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 
 /**

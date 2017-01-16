@@ -1,3 +1,6 @@
+package Bugprediction;
+
+import Bugprediction.Iterators.DocIterator;
 import org.deeplearning4j.berkeley.Pair;
 import org.deeplearning4j.models.embeddings.inmemory.InMemoryLookupTable;
 import org.deeplearning4j.models.embeddings.learning.impl.sequence.DM;
@@ -11,8 +14,8 @@ import org.deeplearning4j.text.tokenization.tokenizerfactory.TokenizerFactory;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import tools.LabelSeeker;
-import tools.MeansBuilder;
+import Bugprediction.tools.LabelSeeker;
+import Bugprediction.tools.MeansBuilder;
 
 import java.util.LinkedList;
 import java.util.List;
