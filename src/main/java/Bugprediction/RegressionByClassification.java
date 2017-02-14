@@ -1,6 +1,7 @@
 package Bugprediction;
 
 import Bugprediction.Iterators.KFoldIterator;
+import Bugprediction.tools.CSVWriter;
 import org.datavec.api.records.reader.RecordReader;
 import org.datavec.api.records.reader.impl.csv.CSVRecordReader;
 import org.datavec.api.split.FileSplit;
@@ -14,6 +15,7 @@ import org.deeplearning4j.nn.conf.layers.OutputLayer;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
+import org.jfree.util.Log;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.SplitTestAndTrain;
@@ -24,30 +26,34 @@ import org.nd4j.linalg.lossfunctions.LossFunctions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.PrintWriter;
+
 /**
  * @author Sébastien Broggi
  */
 public class RegressionByClassification {
-
     private static Logger log = LoggerFactory.getLogger(RegressionByClassification.class);
 
     public static void main(String[] args) throws  Exception {
+        float sumRmse = 0;
+        float examples = 0;
         int labelIndex = 32;     //32 Features
-        int numClasses = 10;     //10 "Bugclassses" (0-9 Bugs)
-        int batchSize = 900;
-        final int numInputs = 32;
-        int outputNum = 10;
-        int iterations = 800;
+        int numClasses = 28;     //Number of Bugs (0-9 Bugs)
+        int batchSize = 10000;
+        int iterations = 250;
         long seed = 6;
+        int repetitions = 100;
+        String project = "pdeAllMetrics.csv"; //jdtAllMetrics, luceneAllMetrics, mylynAllMetrics, pdeAllMetrics, equinoxAllMetrics
 
         //Get Data
         int numLinesToSkip = 0;
         String delimiter = ",";
         RecordReader recordReader = new CSVRecordReader(numLinesToSkip,delimiter);
-        recordReader.initialize(new FileSplit(new ClassPathResource("luceneAllMetrics.csv").getFile()));
-        DataSetIterator iterator = new RecordReaderDataSetIterator(recordReader,batchSize,labelIndex,numClasses);
-        DataSet allData = iterator.next();
-        KFoldIterator kFoldIter = new KFoldIterator(allData);
+        recordReader.initialize(new FileSplit(new ClassPathResource(project).getFile())); //jdtAllMetrics, luceneAllMetrics, mylynAllMetrics
+        DataSetIterator dataSetIterator = new RecordReaderDataSetIterator(recordReader,batchSize,labelIndex,numClasses);
+
+        CSVWriter writer = new CSVWriter("results3.csv");
 
         log.info("Build model....");
         MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
@@ -58,71 +64,104 @@ public class RegressionByClassification {
                 .learningRate(0.1)
                 .regularization(true).l2(1e-4)
                 .list()
-                .layer(0, new DenseLayer.Builder().nIn(numInputs).nOut(numClasses)
+                .layer(0, new DenseLayer.Builder().nIn(labelIndex).nOut(numClasses)
                         .build())
                 .layer(1, new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD)
                         .activation("softmax")
-                        .nIn(numClasses).nOut(outputNum).build())
+                        .nIn(numClasses).nOut(numClasses).build())
                 .backprop(true).pretrain(false)
                 .build();
 
-        //run the model
+        //Set Score Listener
         MultiLayerNetwork model = new MultiLayerNetwork(conf);
         model.init();
         model.setListeners(new ScoreIterationListener(100));
 
-
         //Train and Evaluate
-        float totalError = 0;
-        float examples = 0;
-        while (kFoldIter.hasNext()){
-            DataSet trainingData = kFoldIter.next();
-            DataSet testData = kFoldIter.testFold();
-            DataNormalization normalizer = new NormalizerStandardize();
-            normalizer.fit(trainingData);           //Collect the statistics (mean/stdev) from the training data. This does not modify the input data
-            normalizer.transform(trainingData);     //Apply normalization to the training data
-            normalizer.transform(testData);         //Apply normalization to the test data. This is using statistics calculated from the *training* set
+        DataSet allData = dataSetIterator.next();
 
-            model.fit(trainingData);
+        //Shuffle, Train and Evaluate k-foldIterations, repeat
+        for(int k =0; k<repetitions;k++){
+            allData.shuffle();
+            KFoldIterator kFoldIter = new KFoldIterator(allData);
+            while (kFoldIter.hasNext()){
+                DataSet trainingData = kFoldIter.next();
+                DataSet testData = kFoldIter.testFold();
+                model.fit(trainingData);
 
-            //evaluate the model on the test set
-            INDArray output = model.output(testData.getFeatureMatrix());
-            Integer[] bugs = new Integer[output.rows()];
-            Integer[] values = new Integer[output.rows()];
-            double[] error = new double[output.rows()];
-            INDArray labels = testData.getLabels();
-            for (int i=0; i<output.rows();i++) {
-                float highestGuess = 0;
-                float highestValue = 0;
-                for (int j = 0; j < output.columns(); j++) {
-                    float guessValue = output.getFloat(i, j);
-                    if (guessValue > highestGuess) {
-                        highestGuess = guessValue;
-                        bugs[i] = j;
-                    }
-                    float value = labels.getFloat(i,j);
-                    if (value > highestValue) {
-                        highestValue = value;
-                        values[i] = j;
+                //Evaluate the model on the test set
+                INDArray output = model.output(testData.getFeatureMatrix());
+                Integer[] bugs = new Integer[output.rows()];
+                Integer[] values = new Integer[output.rows()];
+                double[] error = new double[output.rows()];
+                INDArray labels = testData.getLabels();
+                for (int i=0; i<output.rows();i++) {
+                    float highestGuess = 0;
+                    float highestValue = 0;
+                    for (int j = 0; j < output.columns(); j++) {
+                        float guessValue = output.getFloat(i, j);
+                        if (guessValue > highestGuess) {
+                            highestGuess = guessValue;
+                            bugs[i] = j;
+                        }
+                        float value = labels.getFloat(i,j);
+                        if (value > highestValue) {
+                            highestValue = value;
+                            values[i] = j;
+                        }
                     }
                 }
+                sumRmse += evaluate(bugs, values, writer, examples, project);
+                examples ++;
             }
-
-            //Calculate RMSE (over all KFold-Datasets)
-            for (int i=0; i<bugs.length;i++){
-                error[i] = Math.pow(Math.abs(bugs[i] - values[i]), 2.0);
-                totalError += error[i];
-                examples += 1;
-            }
-            double rmse = Math.sqrt(totalError/examples);
-            log.info("RMSE: " + rmse);
-
-            /*
-            Evaluation eval = new Evaluation(numClasses);
-            eval.eval(testData.getLabels(), output);
-            log.info(eval.stats());
-            */
         }
+        double rmse = sumRmse/examples;
+        Log.info("TOTAL Average RMSE: "+rmse);
+        writer.writeLine(-1,"TOTAL RMSE",0,0,0,0,rmse);
+        writer.close();
     }
 
+    private static double evaluate(Integer[] bugs, Integer[] values, CSVWriter writer, float examples, String project) {
+        //Calculate RMSE, accuracy,
+        float squaredErrorSum=0;
+        float correct = 0;
+        float correctClassified = 0;
+        float correctBuggy = 0;
+        float predictedBuggy = 0;
+        float totalBuggy = 0;
+        float total = 0;
+        for (int i=0; i<bugs.length;i++){
+            squaredErrorSum += Math.pow(Math.abs(bugs[i] - values[i]), 2.0);
+            if (bugs[i]==values[i]){
+                correct++;
+            }
+            if ((values[i]!=0)){
+                totalBuggy++;
+            }
+            if ((bugs[i]!=0)){
+                predictedBuggy++;
+            }
+            if ((bugs[i]!=0) && (values[i]!=0)){
+                correctBuggy++;
+            }
+            if (((bugs[i]==0) && (values[i]==0))||((bugs[i]!=0) && (values[i]!=0))){
+                correctClassified++;
+            }
+            total++;
+        }
+        double curRmse = Math.sqrt(squaredErrorSum/bugs.length);
+        float accuracy = correctClassified/total;
+        float accuracyNumber = correct/total;
+        float precision = correctBuggy/predictedBuggy;
+        float recall = correctBuggy/totalBuggy;
+        log.info("Correct Exact Guesses: "+correct+"; \tCorrectly Classified: "+correctClassified+ "; \tRMSE: " + curRmse);
+        log.info("\n\t\t\t\t\t\t\tAccuracy Number: "+accuracyNumber+
+                "; \n\t\t\t\t\t\t\tAccuracy Classification: "+accuracy+
+                "; \n\t\t\t\t\t\t\tPrecision: "+precision+
+                "; \n\t\t\t\t\t\t\tRecall: " +recall);
+
+        writer.writeLine(((int) examples), project, accuracyNumber, accuracy, precision, recall, curRmse);
+
+        return curRmse;
+    }
 }
