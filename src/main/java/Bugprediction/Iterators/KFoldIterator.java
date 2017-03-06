@@ -1,5 +1,6 @@
 package Bugprediction.Iterators;
 
+import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.api.DataSetPreProcessor;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
@@ -14,10 +15,14 @@ public class KFoldIterator implements DataSetIterator{
     private DataSet singleFold;
     private int k;
     private int batch;
+    private int buggyCount;
+    private int fixedCount;
     private int lastBatch;
     private int kCursor=0;
     private DataSet test;
     private DataSet train;
+    private DataSet buggy;
+    private DataSet fixed;
     protected DataSetPreProcessor preProcessor;
 
     public KFoldIterator(DataSet singleFold) {
@@ -38,6 +43,11 @@ public class KFoldIterator implements DataSetIterator{
             if ( k!= 2) {
                 this.batch = singleFold.numExamples()/(k-1);
                 this.lastBatch = singleFold.numExamples() % (k-1);
+                if (this.lastBatch==0){
+                    this.batch = (singleFold.numExamples()/k)-1;
+                    this.lastBatch = singleFold.numExamples() % this.batch;
+                }
+
             }
             else {
                 this.lastBatch = singleFold.numExamples() / 2;
@@ -48,6 +58,39 @@ public class KFoldIterator implements DataSetIterator{
             this.batch = singleFold.numExamples() / k;
             this.lastBatch = singleFold.numExamples() / k;
         }
+
+        //Stratification:
+        //Calculate how much percentage the different labels (buggy/not buggy) are in the set and separate them
+        INDArray labels = singleFold.getLabels();
+        Integer[] values = new Integer[labels.rows()];
+        for (int i=0; i<labels.rows();i++) {
+            float highestValue = 0;
+            for (int j = 0; j < labels.columns(); j++) {
+                float value = labels.getFloat(i,j);
+                if (value > highestValue) {
+                    highestValue = value;
+                    values[i] = j;
+                }
+            }
+        }
+
+        List<DataSet> fixedDataSets = new ArrayList<DataSet>();
+        List<DataSet> buggyDataSets = new ArrayList<DataSet>();
+        for (int i=0; i<labels.rows();i++) {
+            if (singleFold.get(i) != null){
+                if (values[i]>0){
+                    buggyDataSets.add(singleFold.get(i));
+                    buggyCount++;
+                }
+                else{
+                    fixedDataSets.add(singleFold.get(i));
+                    fixedCount++;
+                }
+            }
+        }
+
+        fixed = DataSet.merge(fixedDataSets);
+        buggy = DataSet.merge(buggyDataSets);
     }
 
     @Override
@@ -180,15 +223,29 @@ public class KFoldIterator implements DataSetIterator{
         }
 
         List<DataSet> kMinusOneFoldList = new ArrayList<DataSet>();
-        if (right<totalExamples()) {
-            kMinusOneFoldList.add((DataSet) singleFold.getRange(0,left));
-            kMinusOneFoldList.add((DataSet) singleFold.getRange(right,totalExamples()));
+        int buggyLeft = left * buggyCount / singleFold.numExamples();
+        int buggyRight = right * buggyCount / singleFold.numExamples();
+        int fixedLeft = left * fixedCount / singleFold.numExamples();
+        int fixedRight = right * fixedCount / singleFold.numExamples();
+        if (buggyRight<buggy.getLabels().size(0) && fixedRight<fixed.getLabels().size(0)) {
+            kMinusOneFoldList.add((DataSet) buggy.getRange(0,buggyLeft));
+            kMinusOneFoldList.add((DataSet) fixed.getRange(0,fixedLeft));
+            kMinusOneFoldList.add((DataSet) buggy.getRange(buggyRight,buggy.getLabels().size(0)));
+            kMinusOneFoldList.add((DataSet) fixed.getRange(fixedRight,fixed.getLabels().size(0)));
             train = DataSet.merge(kMinusOneFoldList);
         }
         else {
-            train = (DataSet) singleFold.getRange(0,left);
+            List<DataSet> trainset = new ArrayList<DataSet>();
+            trainset.add((DataSet) buggy.getRange(0,buggyLeft));
+            trainset.add((DataSet) fixed.getRange(0,fixedLeft));
+            train = DataSet.merge(trainset);
         }
-        test = (DataSet) singleFold.getRange(left,right);
+        List<DataSet> testsets = new ArrayList<DataSet>();
+        testsets.add((DataSet) buggy.getRange(buggyLeft,buggyRight));
+        testsets.add((DataSet) fixed.getRange(fixedLeft,fixedRight));
+        test = DataSet.merge(testsets);
+
+        int testsetSize = ((buggyRight-buggyLeft)+(fixedRight-fixedLeft));
 
         kCursor++;
     }
