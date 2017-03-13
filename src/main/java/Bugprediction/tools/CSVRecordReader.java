@@ -64,6 +64,13 @@ public class CSVRecordReader extends LineRecordReader {
     public CSVRecordReader(int skipNumLines,String delimiter) {
         this.skipNumLines = skipNumLines;
         this.delimiter = delimiter;
+        this.numClasses=0;
+    }
+
+    public CSVRecordReader(int skipNumLines,String delimiter, int classesCap) {
+        this.skipNumLines = skipNumLines;
+        this.delimiter = delimiter;
+        this.numClasses=classesCap;
     }
 
     public CSVRecordReader() {
@@ -91,10 +98,12 @@ public class CSVRecordReader extends LineRecordReader {
         Text t =  (Text) super.next().iterator().next();
         String val = t.toString();
         String[] split = val.split(delimiter, -1);
+
+
         //Get Features and cap classes
         numFeatures = split.length-1;
-        if (Integer.parseInt(split[numFeatures])>4){
-            split[numFeatures]= String.valueOf(4);
+        if ((numClasses>0) && (Integer.parseInt(split[numFeatures])>numClasses)){
+            split[numFeatures]= String.valueOf(numClasses);
         }
         List<Writable> ret = new ArrayList<>();
         for(String s : split)
@@ -113,6 +122,10 @@ public class CSVRecordReader extends LineRecordReader {
     public void reset() {
         super.reset();
         skippedLines = false;
+    }
+
+    public int getFeaturesCount(){
+        return numFeatures;
     }
 
     @Override

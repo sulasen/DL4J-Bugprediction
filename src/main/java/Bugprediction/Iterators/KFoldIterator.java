@@ -42,7 +42,7 @@ public class KFoldIterator implements DataSetIterator{
         if (singleFold.numExamples() % k !=0 ) {
             if ( k!= 2) {
                 this.batch = singleFold.numExamples()/(k-1);
-                this.lastBatch = singleFold.numExamples() % (k-1);
+                this.lastBatch = singleFold.numExamples() % this.batch;
                 if (this.lastBatch==0){
                     this.batch = (singleFold.numExamples()/k)-1;
                     this.lastBatch = singleFold.numExamples() % this.batch;
@@ -227,25 +227,34 @@ public class KFoldIterator implements DataSetIterator{
         int buggyRight = right * buggyCount / singleFold.numExamples();
         int fixedLeft = left * fixedCount / singleFold.numExamples();
         int fixedRight = right * fixedCount / singleFold.numExamples();
+
+        //Factor by which there are more 0-Bug cases for oversampling
+        float factor = (fixedCount/buggyCount)/1.5f;
         if (buggyRight<buggy.getLabels().size(0) && fixedRight<fixed.getLabels().size(0)) {
-            kMinusOneFoldList.add((DataSet) buggy.getRange(0,buggyLeft));
-            kMinusOneFoldList.add((DataSet) fixed.getRange(0,fixedLeft));
-            kMinusOneFoldList.add((DataSet) buggy.getRange(buggyRight,buggy.getLabels().size(0)));
+            if (fixedLeft>0)
+                kMinusOneFoldList.add((DataSet) fixed.getRange(0,fixedLeft));
             kMinusOneFoldList.add((DataSet) fixed.getRange(fixedRight,fixed.getLabels().size(0)));
+            for (int i=0; i<factor; i++){
+                if (buggyLeft>0)
+                    kMinusOneFoldList.add((DataSet) buggy.getRange(0,buggyLeft));
+                kMinusOneFoldList.add((DataSet) buggy.getRange(buggyRight,buggy.getLabels().size(0)));
+            }
             train = DataSet.merge(kMinusOneFoldList);
         }
         else {
             List<DataSet> trainset = new ArrayList<DataSet>();
-            trainset.add((DataSet) buggy.getRange(0,buggyLeft));
-            trainset.add((DataSet) fixed.getRange(0,fixedLeft));
+            if (fixedLeft>0)
+                trainset.add((DataSet) fixed.getRange(0,fixedLeft));
+            for (int i=0; i<factor; i++){
+                if (buggyLeft>0)
+                    trainset.add((DataSet) buggy.getRange(0,buggyLeft));
+            }
             train = DataSet.merge(trainset);
         }
         List<DataSet> testsets = new ArrayList<DataSet>();
         testsets.add((DataSet) buggy.getRange(buggyLeft,buggyRight));
         testsets.add((DataSet) fixed.getRange(fixedLeft,fixedRight));
         test = DataSet.merge(testsets);
-
-        int testsetSize = ((buggyRight-buggyLeft)+(fixedRight-fixedLeft));
 
         kCursor++;
     }

@@ -45,26 +45,26 @@ public class RegressionByClassification {
         SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd HH.mm");
         Date date = new Date();
         String dateString = sdfDate.format(date);
-        float sumRmse = 0;
-        int labelIndex = 32;     //32 Features
-        int numClasses = 5;     //Number of Bugs (0-4+ Bugs)
-        int numHiddenLayer = Math.round((labelIndex + numClasses)/2);
-        int iterations = 250;
-        long seed = 6;
-        int repetitions = 100;
         //String[] projects = new String[] { "equinoxAllMetrics.csv" };
-        String[] projects = new String[] { "jdtAllMetrics.csv", "luceneAllMetrics.csv", "mylynAllMetrics.csv", "pdeAllMetrics.csv", "equinoxAllMetrics.csv" };
+        String[] projects = new String[] { "mylynAllMetrics.csv", "jdtAllMetrics.csv", "luceneAllMetrics.csv", "pdeAllMetrics.csv", "equinoxAllMetrics.csv" };
 
         for (String project: projects) {
-            //Get Data
+            int labelIndex = 32;     //32 Features
+            int numClasses = 5;     //Number of Bugs (0-4+ Bugs)
+            int numHiddenLayer = Math.round((labelIndex + numClasses)/2);
+            int iterations = 250;
+            long seed = 6;
+            int repetitions = 1;
             int numLinesToSkip = 0;
             float examples = 0;
+            float sumRmse = 0;
             String delimiter = ",";
-            CSVRecordReader recordReader = new CSVRecordReader(numLinesToSkip, delimiter);
+            //Get Data
+            CSVRecordReader recordReader = new CSVRecordReader(numLinesToSkip, delimiter, numClasses);
             recordReader.initialize(new FileSplit(new ClassPathResource(project).getFile())); //jdtAllMetrics, luceneAllMetrics, mylynAllMetrics
             DataSetIterator dataSetIterator = new RecordReaderDataSetIterator(recordReader, 10000, labelIndex, numClasses);
-
             CSVWriter writer = new CSVWriter("results_" + dateString + " " + project);
+
 
             log.info("Build model....");
             MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
@@ -76,21 +76,22 @@ public class RegressionByClassification {
                     .regularization(true).l2(1e-4)
                     .list()
                     .layer(0, new DenseLayer.Builder().nIn(labelIndex).nOut(numHiddenLayer).build())
-                    .layer(1, new DenseLayer.Builder().nIn(numHiddenLayer).nOut(numHiddenLayer).build())
-                    .layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD).activation("softmax").nIn(numHiddenLayer).nOut(numClasses).build())
+                    .layer(1, new DenseLayer.Builder().nIn(numHiddenLayer).nOut(numClasses).build())
+                    .layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD).activation("softmax").nIn(numClasses).nOut(numClasses).build())
                     .backprop(true).pretrain(false)
                     .build();
-
-            //Set Score Listener
-            MultiLayerNetwork model = new MultiLayerNetwork(conf);
-            model.init();
-            model.setListeners(new ScoreIterationListener(100));
 
             //Train and Evaluate
             DataSet allData = dataSetIterator.next();
 
             //Shuffle, Train and Evaluate k-foldIterations, repeat
             for (int k = 0; k < repetitions; k++) {
+                //Initialize Model and set Score Listener
+                MultiLayerNetwork model = new MultiLayerNetwork(conf);
+                model.init();
+                model.setListeners(new ScoreIterationListener(100));
+
+                //Shuffle Data and initialize K-Fold-Iterator
                 allData.shuffle();
                 KFoldIterator kFoldIter = new KFoldIterator(allData);
                 int kCount = 0;
