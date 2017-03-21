@@ -3,6 +3,7 @@ package Bugprediction;
 import Bugprediction.Iterators.KFoldIterator;
 import Bugprediction.tools.CSVWriter;
 import Bugprediction.tools.CSVRecordReader;
+import Bugprediction.tools.Evaluator;
 import org.datavec.api.records.reader.RecordReader;
 import org.datavec.api.split.FileSplit;
 import org.datavec.api.util.ClassPathResource;
@@ -42,11 +43,12 @@ public class RegressionByClassification {
     private static Logger log = LoggerFactory.getLogger(RegressionByClassification.class);
 
     public static void main(String[] args) throws  Exception {
-        SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd HH.mm");
+        Evaluator evaluator = new Evaluator();
         Date date = new Date();
+        SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd HH.mm");
         String dateString = sdfDate.format(date);
-        //String[] projects = new String[] { "equinoxAllMetrics.csv" };
-        String[] projects = new String[] { "mylynAllMetrics.csv", "jdtAllMetrics.csv", "luceneAllMetrics.csv", "pdeAllMetrics.csv", "equinoxAllMetrics.csv" };
+        String[] projects = new String[] { "mylynAllMetrics.csv" };
+        //String[] projects = new String[] { "mylynAllMetrics.csv", "jdtAllMetrics.csv", "luceneAllMetrics.csv", "pdeAllMetrics.csv", "equinoxAllMetrics.csv" };
 
         for (String project: projects) {
             int labelIndex = 32;     //32 Features
@@ -54,36 +56,37 @@ public class RegressionByClassification {
             int numHiddenLayer = Math.round((labelIndex + numClasses)/2);
             int iterations = 250;
             long seed = 6;
-            int repetitions = 1;
+            int repetitions = 3;
             int numLinesToSkip = 0;
-            float examples = 0;
-            float sumRmse = 0;
             String delimiter = ",";
+            boolean bEnableFloat = true;
+
             //Get Data
             CSVRecordReader recordReader = new CSVRecordReader(numLinesToSkip, delimiter, numClasses);
             recordReader.initialize(new FileSplit(new ClassPathResource(project).getFile())); //jdtAllMetrics, luceneAllMetrics, mylynAllMetrics
             DataSetIterator dataSetIterator = new RecordReaderDataSetIterator(recordReader, 10000, labelIndex, numClasses);
+            DataSet allData = dataSetIterator.next();
             CSVWriter writer = new CSVWriter("results_" + dateString + " " + project);
-
 
             log.info("Build model....");
             MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
                     .seed(seed)
                     .iterations(iterations)
-                    .activation("tanh")
+                    .activation("sigmoid")
                     .weightInit(WeightInit.XAVIER)
                     .learningRate(0.1)
-                    .regularization(true).l2(1e-4)
+                    .regularization(true).l2(1e-2)
                     .list()
                     .layer(0, new DenseLayer.Builder().nIn(labelIndex).nOut(numHiddenLayer).build())
                     .layer(1, new DenseLayer.Builder().nIn(numHiddenLayer).nOut(numClasses).build())
-                    .layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD).activation("softmax").nIn(numClasses).nOut(numClasses).build())
-                    .backprop(true).pretrain(false)
+                    .layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD)
+                            .activation("softmax").nIn(numClasses).nOut(numClasses).build())
+                    .backprop(true)
+                    .pretrain(false)
                     .build();
 
-            //Train and Evaluate
-            DataSet allData = dataSetIterator.next();
 
+            float examples = 0;
             //Shuffle, Train and Evaluate k-foldIterations, repeat
             for (int k = 0; k < repetitions; k++) {
                 //Initialize Model and set Score Listener
@@ -96,6 +99,7 @@ public class RegressionByClassification {
                 KFoldIterator kFoldIter = new KFoldIterator(allData);
                 int kCount = 0;
                 while (kFoldIter.hasNext()) {
+                    Log.info("-----------------------------");
                     Log.info("KFold: " + kCount);
                     DataSet trainingData = kFoldIter.next();
                     DataSet testData = kFoldIter.testFold();
@@ -105,77 +109,46 @@ public class RegressionByClassification {
                     INDArray output = model.output(testData.getFeatureMatrix());
                     Integer[] bugs = new Integer[output.rows()];
                     Integer[] values = new Integer[output.rows()];
-                    double[] error = new double[output.rows()];
+                    double[] bugsFloat = new double[output.rows()];
+                    double[] valuesFloat = new double[output.rows()];
                     INDArray labels = testData.getLabels();
                     for (int i = 0; i < output.rows(); i++) {
                         float highestGuess = 0;
                         float highestValue = 0;
                         for (int j = 0; j < output.columns(); j++) {
                             float guessValue = output.getFloat(i, j);
+                            float value = labels.getFloat(i, j);
                             if (guessValue > highestGuess) {
                                 highestGuess = guessValue;
                                 bugs[i] = j;
                             }
-                            float value = labels.getFloat(i, j);
                             if (value > highestValue) {
                                 highestValue = value;
                                 values[i] = j;
                             }
+                            bugsFloat[i] += guessValue*j;
+                            valuesFloat[i] += value*j;
                         }
                     }
-                    sumRmse += evaluate(bugs, values, writer, examples, project);
+                    if (!bEnableFloat){
+                        evaluator.evaluate(bugs, values, writer, examples, project);
+                    }
+                    else{
+                        evaluator.evaluateFloat(bugsFloat, valuesFloat, writer, examples, project);
+                    }
                     examples++;
                     kCount++;
                 }
             }
-            double rmse = sumRmse / examples;
+            double rmse = evaluator.sumRmse / examples;
+            float pre = evaluator.totalPrecision / examples;
+            float rec = evaluator.totalRecall / examples;
+            float acc = evaluator.totalAccuracy / examples;
+            float accN = evaluator.totalAccuracyNumber / examples;
             Log.info("TOTAL Average RMSE: " + rmse);
-            writer.writeLine(-1, "TOTAL RMSE", 0, 0, 0, 0, rmse);
+            writer.writeLine(-1, "TOTAL RMSE", accN, acc, pre, rec, rmse);
             writer.close();
+            evaluator.clear();
         }
-    }
-
-    private static double evaluate(Integer[] bugs, Integer[] values, CSVWriter writer, float examples, String project) throws FileNotFoundException {
-        //Calculate RMSE, accuracy,
-        float squaredErrorSum=0;
-        float correct = 0;
-        float correctClassified = 0;
-        float correctBuggy = 0;
-        float predictedBuggy = 0;
-        float totalBuggy = 0;
-        float total = 0;
-        for (int i=0; i<bugs.length;i++){
-            squaredErrorSum += Math.pow(Math.abs(bugs[i] - values[i]), 2.0);
-            if (bugs[i]==values[i]){
-                correct++;
-            }
-            if ((values[i]!=0)){
-                totalBuggy++;
-            }
-            if ((bugs[i]!=0)){
-                predictedBuggy++;
-            }
-            if ((bugs[i]!=0) && (values[i]!=0)){
-                correctBuggy++;
-            }
-            if (((bugs[i]==0) && (values[i]==0))||((bugs[i]!=0) && (values[i]!=0))){
-                correctClassified++;
-            }
-            total++;
-        }
-        double curRmse = Math.sqrt(squaredErrorSum/bugs.length);
-        float accuracy = correctClassified/total;
-        float accuracyNumber = correct/total;
-        float precision = correctBuggy/predictedBuggy;
-        float recall = correctBuggy/totalBuggy;
-        log.info("Toal Cases: " + total + "; \tCorrect Exact Guesses: "+correct+"; \tCorrectly Classified: "+correctClassified+ "; \tRMSE: " + curRmse);
-        log.info("\n\t\t\t\t\t\t\tAccuracy Number: "+accuracyNumber+
-                "; \n\t\t\t\t\t\t\tAccuracy Classification: "+accuracy+
-                "; \n\t\t\t\t\t\t\tPrecision: "+precision+
-                "; \n\t\t\t\t\t\t\tRecall: " +recall);
-
-        writer.writeLine(((int) examples), project, accuracyNumber, accuracy, precision, recall, curRmse);
-
-        return curRmse;
     }
 }
