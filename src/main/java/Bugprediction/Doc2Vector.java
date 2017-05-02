@@ -1,8 +1,11 @@
 package Bugprediction;
 
 import Bugprediction.Iterators.DocIterator;
+import Bugprediction.tools.CSVWriter;
+import Bugprediction.tools.Evaluator;
 import org.deeplearning4j.berkeley.Pair;
 import org.deeplearning4j.models.embeddings.inmemory.InMemoryLookupTable;
+import org.deeplearning4j.models.embeddings.learning.impl.sequence.DBOW;
 import org.deeplearning4j.models.embeddings.learning.impl.sequence.DM;
 import org.deeplearning4j.models.paragraphvectors.ParagraphVectors;
 import org.deeplearning4j.models.word2vec.VocabWord;
@@ -17,11 +20,13 @@ import org.slf4j.LoggerFactory;
 import Bugprediction.tools.LabelSeeker;
 import Bugprediction.tools.MeansBuilder;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
 
-/**
- * Created by agibsonccc on 10/9/14.
+/** Part of the Bachelor's thesis of Sébastien Broggi
+ * Based on work by agibsonccc.
  *
  * Neural net that processes text into wordvectors. See below url for an in-depth explanation.
  * https://deeplearning4j.org/word2vec.html
@@ -34,6 +39,7 @@ public class Doc2Vector {
     Double right;
     int total;
     private static Logger log = LoggerFactory.getLogger(Doc2Vector.class);
+    CSVWriter writer;
 
     public Doc2Vector(List<String> rowList, List<String> labelList) throws Exception {
         this.rowList = rowList;
@@ -42,13 +48,17 @@ public class Doc2Vector {
         iterator = new DocIterator(rowList, labelList);
         tokenizerFactory = new DefaultTokenizerFactory();
         tokenizerFactory.setTokenPreProcessor(new CommonPreprocessor());
+
+        Date date = new Date();
+        SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd_HH.mm");
+        String dateString = sdfDate.format(date);
+        this.writer = new CSVWriter("results_" + dateString + "_BugClassifier ");
     }
 
     public void makeParagraphVectors()  throws Exception {
         // ParagraphVectors training configuration
         paragraphVectors = new ParagraphVectors.Builder()
                 .learningRate(0.025)
-                .minLearningRate(0.00001)
                 .batchSize(1000)
                 .epochs(5)
                 .iterate(iterator)
@@ -65,16 +75,13 @@ public class Doc2Vector {
         List<String> availabels = new LinkedList<String>();
         availabels.add("bug");
         availabels.add("fix");
+        //Label counts for all elements in list
         List<String> labels = new LinkedList<String>();
         for (String unlabeled:unlabeledList) {
             labels.add(label);
         }
         DocIterator unlabeledIterator = new DocIterator(unlabeledList, labels);
-         /*
-          Now we'll iterate over unlabeled data, and check which label it could be assigned to
-          Please note: for many domains it's normal to have 1 document fall into few labels at once,
-          with different "weight" for each.
-         */
+
         MeansBuilder meansBuilder = new MeansBuilder((InMemoryLookupTable<VocabWord>) paragraphVectors.getLookupTable(), tokenizerFactory);
         LabelSeeker seeker = new LabelSeeker(availabels, (InMemoryLookupTable<VocabWord>) paragraphVectors.getLookupTable());
 

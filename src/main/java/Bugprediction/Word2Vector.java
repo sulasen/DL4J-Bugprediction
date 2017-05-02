@@ -17,7 +17,8 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * Created by agibsonccc on 10/9/14.
+ * Part of the Bachelor's thesis of Sébastien Broggi
+ * Based on work by agibsonccc.
  *
  * Neural net that processes text into wordvectors. See below url for an in-depth explanation.
  * https://deeplearning4j.org/word2vec.html

@@ -46,10 +46,17 @@ public class CSVWriter {
         sb.append(',');
         sb.append(accuracy_binary);
         sb.append(',');
-        sb.append(precision);
-        sb.append(',');
-        sb.append(recall);
-        sb.append(',');
+        if (precision==-1 && recall==-1){
+            sb.append(',');
+            sb.append(',');
+        }
+        else{
+            sb.append(precision);
+            sb.append(',');
+            sb.append(recall);
+            sb.append(',');
+        }
+
         sb.append(rmse);
         sb.append('\n');
         printWriter.write(sb.toString());
