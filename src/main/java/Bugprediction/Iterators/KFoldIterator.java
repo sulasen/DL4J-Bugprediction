@@ -40,19 +40,8 @@ public class KFoldIterator implements DataSetIterator{
         this.singleFold = singleFold.copy();
         if (k <= 1) throw new IllegalArgumentException();
         if (singleFold.numExamples() % k !=0 ) {
-            if ( k!= 2) {
-                this.batch = singleFold.numExamples()/(k-1);
-                this.lastBatch = singleFold.numExamples() % this.batch;
-                if (this.lastBatch==0){
-                    this.batch = (singleFold.numExamples()/k)-1;
-                    this.lastBatch = singleFold.numExamples() % this.batch;
-                }
-
-            }
-            else {
-                this.lastBatch = singleFold.numExamples() / 2;
-                this.batch = this.lastBatch + 1;
-            }
+            this.batch = Math.round(singleFold.numExamples()/k);
+            this.lastBatch = this.batch + singleFold.numExamples() % this.batch;
         }
         else {
             this.batch = singleFold.numExamples() / k;
@@ -228,13 +217,24 @@ public class KFoldIterator implements DataSetIterator{
         int fixedLeft = left * fixedCount / singleFold.numExamples();
         int fixedRight = right * fixedCount / singleFold.numExamples();
 
-        //Factor by which there are more 0-Bug cases for oversampling
-        float factor = (fixedCount/buggyCount)/1.5f;
+        //Factor by which there are more cases of one type for oversampling
+        float factor1=1;
+        float factor2=1;
+        if (fixedCount>2*buggyCount){
+            factor1 = (float)(fixedCount/buggyCount)/1.5f;
+        }
+        else if (buggyCount>2*fixedCount){
+            factor2 = (float)(buggyCount/fixedCount)/1.5f;
+        }
         if (buggyRight<buggy.getLabels().size(0) && fixedRight<fixed.getLabels().size(0)) {
-            if (fixedLeft>0)
-                kMinusOneFoldList.add((DataSet) fixed.getRange(0,fixedLeft));
-            kMinusOneFoldList.add((DataSet) fixed.getRange(fixedRight,fixed.getLabels().size(0)));
-            for (int i=0; i<factor; i++){
+            //fixed examples
+            for (int i=0; i<factor2; i++) {
+                if (fixedLeft > 0)
+                    kMinusOneFoldList.add((DataSet) fixed.getRange(0, fixedLeft));
+                kMinusOneFoldList.add((DataSet) fixed.getRange(fixedRight, fixed.getLabels().size(0)));
+            }
+            //Buggy examples
+            for (int i=0; i<factor1; i++){
                 if (buggyLeft>0)
                     kMinusOneFoldList.add((DataSet) buggy.getRange(0,buggyLeft));
                 kMinusOneFoldList.add((DataSet) buggy.getRange(buggyRight,buggy.getLabels().size(0)));
@@ -243,9 +243,11 @@ public class KFoldIterator implements DataSetIterator{
         }
         else {
             List<DataSet> trainset = new ArrayList<DataSet>();
-            if (fixedLeft>0)
-                trainset.add((DataSet) fixed.getRange(0,fixedLeft));
-            for (int i=0; i<factor; i++){
+            for (int i=0; i<factor2; i++) {
+                if (fixedLeft > 0)
+                    trainset.add((DataSet) fixed.getRange(0, fixedLeft));
+            }
+            for (int i=0; i<factor1; i++){
                 if (buggyLeft>0)
                     trainset.add((DataSet) buggy.getRange(0,buggyLeft));
             }
@@ -255,6 +257,9 @@ public class KFoldIterator implements DataSetIterator{
         testsets.add((DataSet) buggy.getRange(buggyLeft,buggyRight));
         testsets.add((DataSet) fixed.getRange(fixedLeft,fixedRight));
         test = DataSet.merge(testsets);
+
+        train.shuffle();
+        test.shuffle();
 
         kCursor++;
     }

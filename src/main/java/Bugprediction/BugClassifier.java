@@ -1,5 +1,17 @@
 package Bugprediction;
 
+import Bugprediction.Iterators.TreeIterator;
+import Bugprediction.tools.CSVWriter;
+import Bugprediction.tools.Evaluator;
+import com.github.javaparser.JavaParser;
+import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.BodyDeclaration;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -14,7 +26,7 @@ public class BugClassifier {
         SQLConnector sqlConnector = new SQLConnector();
 
         //Get List with bugs & their fixes, labelled accordingly
-        sqlConnector.getnextPercent(percentTraining);
+        sqlConnector.getnextPercentFiltered(percentTraining);
         List<String> rowList = sqlConnector.getMixedList();
         List<String> labelList = sqlConnector.getLabelList();
 
@@ -23,38 +35,12 @@ public class BugClassifier {
         List<String> unlabeledList1 = sqlConnector.getFixedList();
         List<String> unlabeledList2 = sqlConnector.getBugList();
 
-
-        /*Get AST from JavaParser
-        List<BodyDeclaration> compilationUnits = new LinkedList<>();
-        for (String listItem : unlabeledList1) {
-            try {
-                BodyDeclaration cuItem = JavaParser.parseClassBodyDeclaration("public class A {" + listItem + "}");
-                compilationUnits.add(cuItem);
-                System.out.println(cuItem);
-            }//catch (Exception e){System.out.println("Fail");}
-            finally {}
-        }
-
-        for (BodyDeclaration cu:compilationUnits) {
-            List<NodeList<?>> nodeLists = cu.getNodeLists();
-            for (NodeList nodeList:nodeLists) {
-                Iterator iterator = nodeList.iterator();
-                while(iterator.hasNext()){
-                    Node node = (Node) iterator.next();
-                    while (node.getChildNodes().size()>0){
-
-
-                    }
-                }
-            }
-        }
-*/
-
         //Vectorize the Paragraphs
         Doc2Vector doc2vec = new Doc2Vector(rowList, labelList);
         doc2vec.makeParagraphVectors();
         //Check accuracy
         doc2vec.checkUnlabeledData(unlabeledList1, "fix");
         doc2vec.checkUnlabeledData(unlabeledList2, "bug");
+
     }
 }

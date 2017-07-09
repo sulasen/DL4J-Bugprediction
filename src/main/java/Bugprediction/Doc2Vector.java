@@ -37,31 +37,31 @@ public class Doc2Vector {
     TokenizerFactory tokenizerFactory;
     List<String> rowList;
     Double right;
+    Double error;
+    Double errorCount;
     int total;
     private static Logger log = LoggerFactory.getLogger(Doc2Vector.class);
-    CSVWriter writer;
 
     public Doc2Vector(List<String> rowList, List<String> labelList) throws Exception {
         this.rowList = rowList;
         this.right = 0.0;
+        this.error = 0.0;
+        this.errorCount = 0.0;
         this.total = 0;
         iterator = new DocIterator(rowList, labelList);
         tokenizerFactory = new DefaultTokenizerFactory();
         tokenizerFactory.setTokenPreProcessor(new CommonPreprocessor());
 
-        Date date = new Date();
-        SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd_HH.mm");
-        String dateString = sdfDate.format(date);
-        this.writer = new CSVWriter("results_" + dateString + "_BugClassifier ");
     }
 
     public void makeParagraphVectors()  throws Exception {
         // ParagraphVectors training configuration
         paragraphVectors = new ParagraphVectors.Builder()
-                .learningRate(0.025)
-                .batchSize(1000)
-                .epochs(5)
+                .learningRate(0.04)
+                .batchSize(500)
+                .epochs(3)
                 .iterate(iterator)
+                .minLearningRate(0.000001)
                 .trainWordVectors(true)
                 .tokenizerFactory(tokenizerFactory)
                 .sequenceLearningAlgorithm(new DM())
@@ -96,6 +96,7 @@ public class Doc2Vector {
          */
             log.info("Document '" + document.getLabel() + "' falls into the following categories: ");
             Double highest = 0.0;
+            Double correct = 0.0;
             String strHighest = "";
             for (Pair<String, Double> score : scores) {
                 log.info("        " + score.getFirst() + ": " + score.getSecond());
@@ -103,15 +104,25 @@ public class Doc2Vector {
                     highest = score.getSecond();
                     strHighest = score.getFirst();
                 }
+                if (score.getFirst() == document.getLabel()){
+                    correct = score.getSecond();
+                }
             }
             if (strHighest == document.getLabel()){
                 right++;
+            }
+            else{
+                this.error += Math.abs(highest-correct);
+                this.errorCount++;
+
             }
         }
         this.right += right;
         this.total += unlabeledList.size();
 
         Double accuracy = this.right / this.total;
+        Double totalError = this.error / this.errorCount;
         log.info("Total accuracy :" + accuracy);
+        log.info("Total error :" + totalError);
     }
 }
